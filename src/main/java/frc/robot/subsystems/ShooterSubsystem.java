@@ -50,6 +50,10 @@ public class ShooterSubsystem extends SubsystemBase {
         return runOnce(() -> intakeMotor.set(speed));
     }
 
+    public Command intakestop() {
+        return runOnce(() -> intakeMotor.set(0));
+    }
+
     public Command stop() {
         return runOnce(() -> shooterRightC.setControl(topRequest.withOutput(0)))
         .andThen(
