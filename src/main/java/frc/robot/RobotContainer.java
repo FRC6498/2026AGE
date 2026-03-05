@@ -25,6 +25,7 @@ public class RobotContainer {
     private double MaxSpeed = 1.0 * TunerConstants.kSpeedAt12Volts.in(MetersPerSecond); // kSpeedAt12Volts desired top speed
     private double MaxAngularRate = RotationsPerSecond.of(0.75).in(RadiansPerSecond); // 3/4 of a rotation per second max angular velocity
     public final ShooterSubsystem shooter = new ShooterSubsystem();
+    public final ShooterSubsystem shooter1 = new ShooterSubsystem();
 
     /* Setting up bindings for necessary control of the swerve drive platform */
     private final SwerveRequest.FieldCentric drive = new SwerveRequest.FieldCentric()
@@ -146,10 +147,11 @@ public class RobotContainer {
     )
 );
 //shooter
-    opController.rightBumper().whileTrue(shooter.shoot(.2)).whileFalse(shooter.stop());
-    opController.x().whileTrue(shooter.intake(.2)).whileFalse(shooter.intake(0));
+    opController.rightBumper().whileTrue(shooter.shoot(1)).whileFalse(shooter.stop());
+    //intake
+    opController.x().whileTrue(shooter1.intake(.5)).whileFalse(shooter1.intake(0));
 //joystick.rightBumper().whileTrue(Commands.runEnd(shooter::shoot, shooter::stop, shooter));
-
+qq
     }
 
     public Command getAutonomousCommand() {

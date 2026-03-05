@@ -28,7 +28,7 @@ public class ShooterSubsystem extends SubsystemBase {
         // Motors spin opposite directions to both push the ball the same way
         shooterRightC = new TalonFX(26);
         shooterLeftCC = new TalonFX(21);
-        intakeMotor = new TalonFX(12);
+        intakeMotor = new TalonFX(20);
 
     topRequest = new DutyCycleOut(0);
      bottomRequest = new DutyCycleOut(0);
