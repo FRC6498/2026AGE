@@ -10,6 +10,10 @@ import com.ctre.phoenix6.Utils;
 import com.ctre.phoenix6.swerve.SwerveDrivetrainConstants;
 import com.ctre.phoenix6.swerve.SwerveModuleConstants;
 import com.ctre.phoenix6.swerve.SwerveRequest;
+import com.pathplanner.lib.auto.AutoBuilder;
+import com.pathplanner.lib.config.PIDConstants;
+import com.pathplanner.lib.config.RobotConfig;
+import com.pathplanner.lib.controllers.PPHolonomicDriveController;
 
 import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.geometry.Pose2d;
@@ -127,6 +131,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
         SwerveModuleConstants<?, ?, ?>... modules
     ) {
         super(drivetrainConstants, modules);
+        configureAutoBuilder();
         if (Utils.isSimulation()) {
             startSimThread();
         }
@@ -151,6 +156,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
         SwerveModuleConstants<?, ?, ?>... modules
     ) {
         super(drivetrainConstants, odometryUpdateFrequency, modules);
+        configureAutoBuilder();
         if (Utils.isSimulation()) {
             startSimThread();
         }
@@ -183,6 +189,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
         SwerveModuleConstants<?, ?, ?>... modules
     ) {
         super(drivetrainConstants, odometryUpdateFrequency, odometryStandardDeviation, visionStandardDeviation, modules);
+        configureAutoBuilder();
         if (Utils.isSimulation()) {
             startSimThread();
         }
@@ -238,6 +245,35 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
                 );
                 m_hasAppliedOperatorPerspective = true;
             });
+        }
+    }
+
+    private void configureAutoBuilder() {
+        SwerveRequest.ApplyRobotSpeeds autoRequest = new SwerveRequest.ApplyRobotSpeeds();
+        try {
+            RobotConfig config = RobotConfig.fromGUISettings(); // read config created from Pathplanner settings GUI
+            AutoBuilder.configure(
+                ()-> getState().Pose, // get robot pose
+                this::resetPose, // supply method to reset pose
+                ()-> getState().Speeds, // get current robot chasis speeds
+                (speeds, feeds) -> setControl(
+                    // applies robot relative chasis speeds and feedforwards
+                    autoRequest
+                    .withSpeeds(speeds)
+                    .withWheelForceFeedforwardsX(feeds.robotRelativeForcesXNewtons())
+                    .withWheelForceFeedforwardsY(feeds.robotRelativeForcesYNewtons())
+                ),
+                 new PPHolonomicDriveController(
+                    new PIDConstants(5), // random PID constants (need to be tuned)
+                    new PIDConstants(5)
+                ), 
+                config, 
+                ()-> DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Red /*flip the path if on Red Alliance*/, 
+                this
+                );
+        } catch (Exception e) {
+          e.printStackTrace();
+        DriverStation.reportError("Failed to configure AutoBuilder: " + e.getMessage(), e.getStackTrace());
         }
     }
 
