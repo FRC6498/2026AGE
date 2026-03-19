@@ -5,6 +5,8 @@ package frc.robot;
 
 import static edu.wpi.first.units.Units.*;
 
+import java.nio.file.OpenOption;
+
 import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
 import com.ctre.phoenix6.swerve.SwerveRequest;
 
@@ -19,13 +21,18 @@ import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
 import frc.robot.generated.TunerConstants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.ShooterSubsystem;
+import frc.robot.subsystems.Intake;
 
 
 public class RobotContainer {
-    private double MaxSpeed = 1.0 * TunerConstants.kSpeedAt12Volts.in(MetersPerSecond); // kSpeedAt12Volts desired top speed
+    private double MaxSpeed = 1.0 * TunerConstants.kSpeedAt12Volts.in(MetersPerSecond); // kSpeedAt12Volts desired top speed change speed?
     private double MaxAngularRate = RotationsPerSecond.of(0.75).in(RadiansPerSecond); // 3/4 of a rotation per second max angular velocity
+    private static double clamp(double val, double min, double max) {
+    return Math.max(min, Math.min(max, val));
+    }
     public final ShooterSubsystem shooter = new ShooterSubsystem();
     public final ShooterSubsystem shooter1 = new ShooterSubsystem();
+    public final Intake intake = new Intake();
 
     /* Setting up bindings for necessary control of the swerve drive platform */
     private final SwerveRequest.FieldCentric drive = new SwerveRequest.FieldCentric()
@@ -63,8 +70,7 @@ public class RobotContainer {
         RobotModeTriggers.disabled().whileTrue(
             drivetrain.applyRequest(() -> idle).ignoringDisable(true)
         );
-
-        drivController.a().whileTrue(drivetrain.applyRequest(() -> brake));
+        
         drivController.b().whileTrue(drivetrain.applyRequest(() ->
             point.withModuleDirection(new Rotation2d(-drivController.getLeftY(), -drivController.getLeftX()))
         ));
@@ -77,21 +83,21 @@ public class RobotContainer {
         drivController.start().and(drivController.x()).whileTrue(drivetrain.sysIdQuasistatic(Direction.kReverse));
 
         // Reset the field-centric heading on left bumper press.
-        drivController.leftBumper().onTrue(drivetrain.runOnce(drivetrain::seedFieldCentric));
+        drivController.x().onTrue(drivetrain.runOnce(drivetrain::seedFieldCentric));
 
         drivetrain.registerTelemetry(logger::telemeterize);
 
 
-         drivController.rightTrigger().whileTrue(
+drivController.rightTrigger().whileTrue(
     new RunCommand(
         () -> {
-            
-            int[] allowedTags = {25, 26, 21, 24,27,18,19,20}; // target specific tags
-            
+            int[] allowedTags = {25, 26, 21, 24, 27, 18, 19, 20};
+
             int currentTagID = (int) LimelightHelpers.getFiducialID("limelight");
             double rotationRate = 0;
-            
-            // Check if the current tag is in our allowed list
+            double velocityX = -drivController.getLeftY() * MaxSpeed;
+            double velocityY = -drivController.getLeftX() * MaxSpeed;  // always manual
+
             boolean isAllowedTag = false;
             for (int allowedTag : allowedTags) {
                 if (currentTagID == allowedTag) {
@@ -99,21 +105,38 @@ public class RobotContainer {
                     break;
                 }
             }
-            
-            // Only apply Limelight rotation if we're seeing an allowed tag
+
             if (isAllowedTag && LimelightHelpers.getTV("limelight")) {
+                // ── Rotation lock ──────────────────────────────────────────
                 rotationRate = LimelightHelpers.getTX("limelight") * -0.06;
+
+                // ── Auto drive to fixed distance ───────────────────────────
+                double targetDistanceM = 1.4;
+
+                double[] botPose = LimelightHelpers.getBotPose_TargetSpace("limelight");
+                if (botPose != null && botPose.length >= 3) {
+                    double currentDistanceM = Math.abs(botPose[2]);
+                    double distanceError = currentDistanceM - targetDistanceM;
+
+                    // Only override forward/back — left/right stays manual
+                    velocityX = clamp(distanceError * 1.4, -MaxSpeed * 0.4, MaxSpeed * 0.4);
+                    // velocityY is intentionally left as manual (getLeftX above)
+                }
             }
-            
+
             drivetrain.setControl(
-                drive.withVelocityX(-drivController.getLeftY() * MaxSpeed)
-                    .withVelocityY(-drivController.getLeftX() * MaxSpeed)
+                drive.withVelocityX(velocityX)
+                    .withVelocityY(velocityY)
                     .withRotationalRate(rotationRate)
             );
         },
         drivetrain
     )
 );
+
+
+
+
             drivController.leftTrigger().whileTrue(
     new RunCommand(
         () -> {
@@ -146,12 +169,41 @@ public class RobotContainer {
         drivetrain
     )
 );
-//shooter
-    opController.rightBumper().whileTrue(shooter.shoot(1)).whileFalse(shooter.stop());
-    //intake
-    opController.x().whileTrue(shooter1.intake(.5)).whileFalse(shooter1.intake(0));
-//joystick.rightBumper().whileTrue(Commands.runEnd(shooter::shoot, shooter::stop, shooter));
-qq
+
+// Flywheel — auto speed based on distance
+//opController.rightBumper().whileTrue(
+    //new RunCommand(
+
+        //() -> {
+          //  double ty = LimelightHelpers.getTY("limelight");
+            //hood.setAngleFromTY(ty);
+            //shooter.setFlywheelFromTY(ty);
+        //},
+        //shooter
+    //)
+//).onFalse(Commands.runOnce(() -> {
+   // shooter.stop().schedule();
+//}, shooter));
+
+opController.rightBumper().onTrue(shooter.setFlywheel(.9)).onFalse(shooter.setFlywheel(0));
+
+
+// Intake feed — auto speed based on distance
+opController.x().whileTrue(shooter1.intake(.8)).whileFalse(shooter1.stop());
+
+//Intake
+    opController.a().whileTrue(intake.runIntake(.6)).onFalse(intake.stopIntake());
+
+
+// hold lefttrigger to move in
+opController.leftTrigger().whileTrue(intake.goin(-0.2))
+                .onFalse(intake.goin(0));
+
+
+//  hold righttrigger to move out
+opController.rightTrigger().whileTrue(intake.goOut(0.2))
+                .onFalse(intake.goOut(0));
+
     }
 
     public Command getAutonomousCommand() {
